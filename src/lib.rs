@@ -1,10 +1,10 @@
 #![doc = include_str!("../README.md")]
 
-use tracing_core::{field::Field, span, Event, Subscriber};
+use tracing::{field::Field, span, Collect, Event};
 use tracing_subscriber::{
-    layer::Context,
     registry::{LookupSpan, SpanRef},
-    Layer,
+    subscribe::Context,
+    Subscribe,
 };
 
 use serde_json::{json, Value as JsonValue};
@@ -36,7 +36,7 @@ type Object = serde_json::Map<String, JsonValue>;
 /// A [`Layer`](tracing_subscriber::Layer) that writes a Chrome trace file.
 pub struct ChromeLayer<S>
 where
-    S: Subscriber + for<'span> LookupSpan<'span> + Send + Sync,
+    S: Collect + for<'span> LookupSpan<'span> + Send + Sync,
 {
     out: Arc<Mutex<Sender<Message>>>,
     start: std::time::Instant,
@@ -53,7 +53,7 @@ where
 #[derive(Default)]
 pub struct ChromeLayerBuilder<S>
 where
-    S: Subscriber + for<'span> LookupSpan<'span> + Send + Sync,
+    S: Collect + for<'span> LookupSpan<'span> + Send + Sync,
 {
     out_writer: Option<Box<dyn Write + Send>>,
     name_fn: Option<NameFn<S>>,
@@ -78,7 +78,7 @@ pub enum TraceStyle {
 
 impl<S> ChromeLayerBuilder<S>
 where
-    S: Subscriber + for<'span> LookupSpan<'span> + Send + Sync,
+    S: Collect + for<'span> LookupSpan<'span> + Send + Sync,
 {
     pub fn new() -> Self {
         ChromeLayerBuilder {
@@ -261,7 +261,7 @@ enum Message {
 /// Represents either an [`Event`](tracing_core::Event) or [`SpanRef`](tracing_subscriber::registry::SpanRef).
 pub enum EventOrSpan<'a, 'b, S>
 where
-    S: Subscriber + for<'span> LookupSpan<'span> + Send + Sync,
+    S: Collect + for<'span> LookupSpan<'span> + Send + Sync,
 {
     Event(&'a Event<'b>),
     Span(&'a SpanRef<'b, S>),
@@ -282,7 +282,7 @@ fn create_default_writer() -> Box<dyn Write + Send> {
 
 impl<S> ChromeLayer<S>
 where
-    S: Subscriber + for<'span> LookupSpan<'span> + Send + Sync,
+    S: Collect + for<'span> LookupSpan<'span> + Send + Sync,
 {
     fn new(mut builder: ChromeLayerBuilder<S>) -> (ChromeLayer<S>, FlushGuard) {
         let (tx, rx) = mpsc::channel();
@@ -527,9 +527,9 @@ where
     }
 }
 
-impl<S> Layer<S> for ChromeLayer<S>
+impl<S> Subscribe<S> for ChromeLayer<S>
 where
-    S: Subscriber + for<'span> LookupSpan<'span> + Send + Sync,
+    S: Collect + for<'span> LookupSpan<'span> + Send + Sync,
 {
     fn on_enter(&self, id: &span::Id, ctx: Context<'_, S>) {
         if let TraceStyle::Async = self.trace_style {
